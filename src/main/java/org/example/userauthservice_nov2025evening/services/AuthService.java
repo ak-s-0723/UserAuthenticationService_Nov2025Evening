@@ -38,17 +38,20 @@ public class AuthService implements IAuthService {
        user.setCreatedAt(new Date());
        user.setLastUpdatedAt(new Date());
        user.setState(State.ACTIVE);
+
+       Role role = null;
        Optional<Role> roleOptional = roleRepo.findByValue("NON_ADMIN");
        if(roleOptional.isEmpty()) {
-           Role role = new Role();
+           role = new Role();
            role.setValue("NON_ADMIN");
            role.setCreatedAt(new Date());
            role.setLastUpdatedAt(new Date());
            role.setState(State.ACTIVE);
            roleRepo.save(role);
+       } else {
+           role = roleOptional.get();
        }
 
-        Role role = roleRepo.findByValue("NON_ADMIN").get();
         List<Role> existingRoles = user.getRoles();
         existingRoles.add(role);
         user.setRoles(existingRoles);
