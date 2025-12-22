@@ -19,17 +19,9 @@ public class SpringSecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity.cors().disable();
         httpSecurity.csrf().disable();
-        httpSecurity.authorizeHttpRequests(authorize -> authorize.anyRequest()
-                .permitAll());
-        return httpSecurity.build();
-    }
-
-   // @Bean
-    public SecurityFilterChain securityFilterChain1(HttpSecurity httpSecurity) throws Exception {
-        httpSecurity.cors().disable();
-        httpSecurity.csrf().disable();
-        httpSecurity.authorizeHttpRequests(authorize -> authorize.anyRequest()
-                .authenticated());
+        httpSecurity.authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
+//                .requestMatchers("/actuator/health").permitAll()
+//                .anyRequest().authenticated());
         return httpSecurity.build();
     }
 }
