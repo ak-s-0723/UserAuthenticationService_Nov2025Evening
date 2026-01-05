@@ -1,20 +1,27 @@
 package org.example.userauthservice_nov2025evening.services;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtParser;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.MacAlgorithm;
+import org.antlr.v4.runtime.misc.Pair;
 import org.example.userauthservice_nov2025evening.exceptions.IncorrectPasswordException;
 import org.example.userauthservice_nov2025evening.exceptions.UserAlreadyExistException;
 import org.example.userauthservice_nov2025evening.exceptions.UserNotRegisteredException;
 import org.example.userauthservice_nov2025evening.models.Role;
+import org.example.userauthservice_nov2025evening.models.Session;
 import org.example.userauthservice_nov2025evening.models.State;
 import org.example.userauthservice_nov2025evening.models.User;
 import org.example.userauthservice_nov2025evening.repos.RoleRepo;
+import org.example.userauthservice_nov2025evening.repos.SessionRepo;
 import org.example.userauthservice_nov2025evening.repos.UserRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 @Service
 public class AuthService implements IAuthService {
@@ -27,6 +34,12 @@ public class AuthService implements IAuthService {
 
     @Autowired
     private BCryptPasswordEncoder bCryptPasswordEncoder;
+
+    @Autowired
+    private SessionRepo sessionRepo;
+
+    @Autowired
+    private SecretKey secretKey;
 
     @Override
     public User signup(String name, String email, String password) {
@@ -63,7 +76,7 @@ public class AuthService implements IAuthService {
     }
 
     @Override
-    public User login(String email, String password) {
+    public Pair<User,String> login(String email, String password) {
         Optional<User> userOptional = userRepo.findByEmail(email);
         if (userOptional.isEmpty()) {
             throw new UserNotRegisteredException("Please register first");
@@ -75,7 +88,74 @@ public class AuthService implements IAuthService {
             throw new IncorrectPasswordException("Incorrect password passed");
         }
 
-        return user;
+        // Generating JWT
 
+//        String message = "{\n" +
+//                "   \"email\": \"anurag@gmail.com\",\n" +
+//                "   \"roles\": [\n" +
+//                "      \"instructor\",\n" +
+//                "      \"buddy\"\n" +
+//                "   ],\n" +
+//                "   \"expirationDate\": \"2ndApril2026\"\n" +
+//                "}";
+//
+//        byte[] content = message.getBytes(StandardCharsets.UTF_8);
+
+        Map<String,Object> claims = new HashMap<>();
+        claims.put("user_id" ,user.getId());
+        List<String> roles = new ArrayList<>();
+
+        for(Role role : user.getRoles()) {
+            roles.add(role.getValue());
+        }
+
+        claims.put("access",roles);
+
+        Long currentTime = System.currentTimeMillis();
+        claims.put("iat",currentTime);
+        claims.put("exp",currentTime+10);
+        claims.put("issuer","scaler");
+
+
+        String token = Jwts.builder().claims(claims)
+                .signWith(secretKey).compact();
+
+        Session session = new Session();
+        session.setUser(user);
+        session.setToken(token);
+        session.setState(State.ACTIVE);
+        sessionRepo.save(session);
+
+        return new Pair<>(user,token);
+    }
+
+    public Boolean validateToken(String token) {
+
+        Optional<Session> sessionOptional = sessionRepo.findByToken(token);
+
+        if(sessionOptional.isEmpty()) {
+            return false;
+        }
+
+        Session session = sessionOptional.get();
+
+        //MacAlgorithm algorithm = Jwts.SIG.HS256;
+        //SecretKey secretKey = algorithm.key().build();
+
+        JwtParser jwtParser  = Jwts.parser().verifyWith(secretKey).build();
+        Claims claims = jwtParser.parseSignedClaims(token).getPayload();
+
+        Long expiry = (Long)claims.get("exp");
+
+        Long currentTime = System.currentTimeMillis();
+
+        if(currentTime > expiry) {
+            System.out.println("Token has expired");
+            session.setState(State.INACTIVE);
+            sessionRepo.save(session);
+            return false;
+        }
+
+        return true;
     }
 }
